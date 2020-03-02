@@ -11,6 +11,7 @@ import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -20,8 +21,12 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.snackbar.Snackbar;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.FirebaseOptions;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 
 import dmax.dialog.SpotsDialog;
 
@@ -31,6 +36,9 @@ public class MainActivity extends AppCompatActivity {
     TextView tvLogin, tvForgot;
     EditText etEmail, etPassword;
     FirebaseAuth mAuth;
+    FirebaseAuth mAuthDriver;
+    public static boolean hasSavedOffline = false;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,12 +46,16 @@ public class MainActivity extends AppCompatActivity {
         this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         setContentView(R.layout.activity_main);
 
+        if (hasSavedOffline == false) {
+            FirebaseDatabase.getInstance().setPersistenceEnabled(true);
+            hasSavedOffline = true;
+        }
+
         tvLogin = findViewById(R.id.tvLogin);
         tvForgot = findViewById(R.id.tvForgot);
         etPassword = findViewById(R.id.etPassword);
         etEmail = findViewById(R.id.etEmail);
         root_layout = findViewById(R.id.root_layout);
-
 
         mAuth = FirebaseAuth.getInstance();
 

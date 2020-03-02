@@ -5,27 +5,40 @@ import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
-import androidx.cardview.widget.CardView;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.resource.bitmap.ResourceBitmapDecoder;
 import com.google.android.material.navigation.NavigationView;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.FirebaseOptions;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.mapbox.android.core.permissions.PermissionsListener;
 import com.mapbox.android.core.permissions.PermissionsManager;
-import com.mapbox.api.directions.v5.models.DirectionsRoute;
 import com.mapbox.mapboxsdk.Mapbox;
+import com.mapbox.mapboxsdk.annotations.IconFactory;
+import com.mapbox.mapboxsdk.annotations.MarkerOptions;
 import com.mapbox.mapboxsdk.geometry.LatLng;
 import com.mapbox.mapboxsdk.location.LocationComponent;
 import com.mapbox.mapboxsdk.location.LocationComponentActivationOptions;
@@ -35,12 +48,13 @@ import com.mapbox.mapboxsdk.maps.MapView;
 import com.mapbox.mapboxsdk.maps.MapboxMap;
 import com.mapbox.mapboxsdk.maps.OnMapReadyCallback;
 import com.mapbox.mapboxsdk.maps.Style;
-import com.mapbox.services.android.navigation.ui.v5.route.NavigationMapRoute;
 
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import dmax.dialog.SpotsDialog;
 
 public class MapHome extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener, OnMapReadyCallback, PermissionsListener {
     private MapView mapView;
@@ -48,8 +62,16 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
     private MapboxMap mapboxMap;
     private LocationComponent locationComponent;
 
-    TextView tvTotalDrivers, tvActiveDrivers;
+    ArrayList<marker> markers = new ArrayList<marker>();
+    ArrayList<DriverLiveLocation> driverLiveLocations=new ArrayList<>();
 
+    FirebaseOptions firebaseOptions;
+    FirebaseApp driverApp;
+    FirebaseDatabase driverDatabase;
+    DatabaseReference driverDatabaseReference;
+
+
+    TextView tvTotalDrivers, tvActiveDrivers;
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
@@ -68,18 +90,140 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
         toggle.syncState();
         navigationView.setNavigationItemSelectedListener(this);
 
+
+        try {
+            firebaseOptions = new FirebaseOptions.Builder()
+                    .setApiKey("AIzaSyAub2yA7zUX_1a_W6hlcKoPrp7UyyKHjGw")
+                    .setApplicationId("1:792582559632:android:8dc382230bc9e3b482c515")
+                    .setDatabaseUrl("https://driver-app-9e22d.firebaseio.com")
+                    .build();
+
+            driverApp = FirebaseApp.initializeApp(getApplicationContext(), firebaseOptions, "Driver App");
+            driverDatabase = FirebaseDatabase.getInstance(driverApp);
+            driverDatabaseReference = driverDatabase.getReference();
+        } catch (Exception e) {
+        }
+
         mapView = findViewById(R.id.mapView);
         mapView.onCreate(savedInstanceState);
         mapView.getMapAsync(MapHome.this);
 
-        tvTotalDrivers=findViewById(R.id.tvTotalDrivers);
-        tvActiveDrivers=findViewById(R.id.tvActiveDrivers);
+        tvTotalDrivers = findViewById(R.id.tvTotalDrivers);
+        tvActiveDrivers = findViewById(R.id.tvActiveDrivers);
 
+        getDriverLiveLocation();
+
+/*
+        final AlertDialog alertDialog = new SpotsDialog(MapHome.this);
+        alertDialog.show();
+        final Handler handler = new Handler();
+        final Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                if (alertDialog.isShowing()) {
+                    alertDialog.dismiss();
+
+                    addMarkersFromDatabase();
+                }
+            }
+        };
+        handler.postDelayed(runnable, 3000);
+
+        alertDialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
+            @Override
+            public void onDismiss(DialogInterface dialog) {
+                handler.removeCallbacks(runnable);
+            }
+        });
+
+ */
     }
 
     // map functions===================================================================================================
 
+    private void getDriverLiveLocation()
+    {
+        if (FirebaseAuth.getInstance().getCurrentUser().getUid() != null && driverApp!=null) {
+            DatabaseReference databaseReference = driverDatabaseReference.child("Managers/" + FirebaseAuth.getInstance().getCurrentUser().getUid());
+            databaseReference.addValueEventListener(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
 
+                    driverLiveLocations.clear();
+
+                    for (DataSnapshot parentNode : dataSnapshot.getChildren()) {
+                        //if the live location is provided
+                        if (parentNode.hasChild("liveLocation")) {
+                            DriverLiveLocation d = parentNode.child("liveLocation").getValue(DriverLiveLocation.class);
+                            driverLiveLocations.add(d);
+                        }
+                    }
+
+                    ArrayList<Double> lat = new ArrayList<Double>();
+                    ArrayList<Double> lng = new ArrayList<Double>();
+
+                    for (int i = 0; i < driverLiveLocations.size(); i++) {
+                        lat.add(driverLiveLocations.get(i).getLiveLat());
+                        lng.add(driverLiveLocations.get(i).getLiveLng());
+                    }
+
+                    for (int i = 0; i < driverLiveLocations.size(); i++) {
+
+
+                        MarkerOptions markerOptions = new MarkerOptions()
+                                .position(new LatLng(lat.get(i), lng.get(i)));
+                        mapboxMap.addMarker(markerOptions);
+                    }
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+                    Toast.makeText(MapHome.this, "ERROR: " + databaseError.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+    }
+
+   /* private void addMarkersFromDatabase() {
+        DatabaseReference databaseReference = driverDatabaseReference.child("Managers/"+FirebaseAuth.getInstance().getCurrentUser().getUid());
+        databaseReference.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+
+                markers.clear();
+
+                for (DataSnapshot parentNode : dataSnapshot.getChildren()) {
+                    DataSnapshot childNode=parentNode.child("Markers");
+                    for (DataSnapshot keyNode:childNode.getChildren()) {
+                        marker m = keyNode.getValue(marker.class);
+                        markers.add(m);
+                    }
+                }
+
+                ArrayList<Double> lat = new ArrayList<Double>();
+                ArrayList<Double> lng = new ArrayList<Double>();
+
+                for (int i = 0; i < markers.size(); i++) {
+                    lat.add(markers.get(i).getLat());
+                    lng.add(markers.get(i).getLng());
+                }
+
+                for (int i = 0; i < markers.size(); i++) {
+
+                    MarkerOptions markerOptions = new MarkerOptions()
+                            .position(new LatLng(lat.get(i), lng.get(i)))
+                            ;
+                    mapboxMap.addMarker(markerOptions);
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+                Toast.makeText(MapHome.this, "ERROR: " + databaseError.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+    */
     @Override
     public void onMapReady(@NonNull MapboxMap mapboxMap) {
         this.mapboxMap = mapboxMap;
