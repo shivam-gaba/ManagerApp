@@ -38,6 +38,7 @@ import com.mapbox.android.core.permissions.PermissionsListener;
 import com.mapbox.android.core.permissions.PermissionsManager;
 import com.mapbox.mapboxsdk.Mapbox;
 import com.mapbox.mapboxsdk.annotations.IconFactory;
+import com.mapbox.mapboxsdk.annotations.Marker;
 import com.mapbox.mapboxsdk.annotations.MarkerOptions;
 import com.mapbox.mapboxsdk.geometry.LatLng;
 import com.mapbox.mapboxsdk.location.LocationComponent;
@@ -51,6 +52,7 @@ import com.mapbox.mapboxsdk.maps.Style;
 
 import org.jetbrains.annotations.NotNull;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -63,14 +65,16 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
     private LocationComponent locationComponent;
 
     ArrayList<marker> markers = new ArrayList<marker>();
-    ArrayList<DriverLiveLocation> driverLiveLocations=new ArrayList<>();
+    ArrayList<DriverLiveLocation> driverLiveLocations = new ArrayList<>();
+
 
     FirebaseOptions firebaseOptions;
     FirebaseApp driverApp;
     FirebaseDatabase driverDatabase;
     DatabaseReference driverDatabaseReference;
 
-
+    public static int activeUsers;
+    public static int offlineUsers;
     TextView tvTotalDrivers, tvActiveDrivers;
 
     @RequiresApi(api = Build.VERSION_CODES.M)
@@ -137,27 +141,39 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
         });
 
  */
+
+
     }
 
     // map functions===================================================================================================
 
-    private void getDriverLiveLocation()
-    {
-        if (FirebaseAuth.getInstance().getCurrentUser().getUid() != null && driverApp!=null) {
+    private void getDriverLiveLocation() {
+        if (FirebaseAuth.getInstance().getCurrentUser().getUid() != null && driverApp != null) {
             DatabaseReference databaseReference = driverDatabaseReference.child("Managers/" + FirebaseAuth.getInstance().getCurrentUser().getUid());
             databaseReference.addValueEventListener(new ValueEventListener() {
                 @Override
                 public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
 
                     driverLiveLocations.clear();
+                    mapboxMap.getMarkers().clear();
+                    mapboxMap.clear();
+                    mapboxMap.removeAnnotations();
+                    offlineUsers = 0;
 
                     for (DataSnapshot parentNode : dataSnapshot.getChildren()) {
                         //if the live location is provided
+
                         if (parentNode.hasChild("liveLocation")) {
+
                             DriverLiveLocation d = parentNode.child("liveLocation").getValue(DriverLiveLocation.class);
                             driverLiveLocations.add(d);
+                        } else {
+                            offlineUsers++;
                         }
                     }
+                    tvActiveDrivers.setText(driverLiveLocations.size() + "");
+
+                    tvTotalDrivers.setText(driverLiveLocations.size() + offlineUsers + "");
 
                     ArrayList<Double> lat = new ArrayList<Double>();
                     ArrayList<Double> lng = new ArrayList<Double>();
@@ -168,10 +184,11 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
                     }
 
                     for (int i = 0; i < driverLiveLocations.size(); i++) {
-
-
                         MarkerOptions markerOptions = new MarkerOptions()
-                                .position(new LatLng(lat.get(i), lng.get(i)));
+                                .icon(IconFactory.getInstance(MapHome.this).fromResource(R.drawable.truckimage))
+                                .position(new LatLng(lat.get(i), lng.get(i)))
+                                .title("liveLat: " + driverLiveLocations.get(i).getLiveLat() + " and " + "liveLng: " +
+                                        driverLiveLocations.get(i).getLiveLng());
                         mapboxMap.addMarker(markerOptions);
                     }
                 }
@@ -184,51 +201,59 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
         }
     }
 
-   /* private void addMarkersFromDatabase() {
-        DatabaseReference databaseReference = driverDatabaseReference.child("Managers/"+FirebaseAuth.getInstance().getCurrentUser().getUid());
-        databaseReference.addListenerForSingleValueEvent(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
 
-                markers.clear();
+    /* private void addMarkersFromDatabase() {
+         DatabaseReference databaseReference = driverDatabaseReference.child("Managers/"+FirebaseAuth.getInstance().getCurrentUser().getUid());
+         databaseReference.addListenerForSingleValueEvent(new ValueEventListener() {
+             @Override
+             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
 
-                for (DataSnapshot parentNode : dataSnapshot.getChildren()) {
-                    DataSnapshot childNode=parentNode.child("Markers");
-                    for (DataSnapshot keyNode:childNode.getChildren()) {
-                        marker m = keyNode.getValue(marker.class);
-                        markers.add(m);
-                    }
-                }
+                 markers.clear();
 
-                ArrayList<Double> lat = new ArrayList<Double>();
-                ArrayList<Double> lng = new ArrayList<Double>();
+                 for (DataSnapshot parentNode : dataSnapshot.getChildren()) {
+                     DataSnapshot childNode=parentNode.child("Markers");
+                     for (DataSnapshot keyNode:childNode.getChildren()) {
+                         marker m = keyNode.getValue(marker.class);
+                         markers.add(m);
+                     }
+                 }
 
-                for (int i = 0; i < markers.size(); i++) {
-                    lat.add(markers.get(i).getLat());
-                    lng.add(markers.get(i).getLng());
-                }
+                 ArrayList<Double> lat = new ArrayList<Double>();
+                 ArrayList<Double> lng = new ArrayList<Double>();
 
-                for (int i = 0; i < markers.size(); i++) {
+                 for (int i = 0; i < markers.size(); i++) {
+                     lat.add(markers.get(i).getLat());
+                     lng.add(markers.get(i).getLng());
+                 }
 
-                    MarkerOptions markerOptions = new MarkerOptions()
-                            .position(new LatLng(lat.get(i), lng.get(i)))
-                            ;
-                    mapboxMap.addMarker(markerOptions);
-                }
-            }
+                 for (int i = 0; i < markers.size(); i++) {
 
-            @Override
-            public void onCancelled(@NonNull DatabaseError databaseError) {
-                Toast.makeText(MapHome.this, "ERROR: " + databaseError.getMessage(), Toast.LENGTH_LONG).show();
-            }
-        });
-    }
-    */
+                     MarkerOptions markerOptions = new MarkerOptions()
+                             .position(new LatLng(lat.get(i), lng.get(i)))
+                             ;
+                     mapboxMap.addMarker(markerOptions);
+                 }
+             }
+
+             @Override
+             public void onCancelled(@NonNull DatabaseError databaseError) {
+                 Toast.makeText(MapHome.this, "ERROR: " + databaseError.getMessage(), Toast.LENGTH_LONG).show();
+             }
+         });
+     }
+     */
     @Override
     public void onMapReady(@NonNull MapboxMap mapboxMap) {
         this.mapboxMap = mapboxMap;
-        mapboxMap.setStyle(Style.MAPBOX_STREETS, style -> {
+        mapboxMap.setStyle(Style.LIGHT, style -> {
             enableLocationComponent(style);
+            mapboxMap.setOnMarkerClickListener(new MapboxMap.OnMarkerClickListener() {
+                @Override
+                public boolean onMarkerClick(@NonNull Marker marker) {
+                    Toast.makeText(MapHome.this, marker.getPosition().toString(), Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+            });
         });
     }
 
@@ -315,6 +340,7 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
     protected void onDestroy() {
         super.onDestroy();
         mapView.onDestroy();
+
     }
 
     @Override
@@ -340,6 +366,13 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
                 break;
 
             case R.id.drivers:
+                try{
+                   getDriversFromDatabase();
+               }
+                catch (Exception e)
+                {
+                    Toast.makeText(this, "Reopen the Application", Toast.LENGTH_SHORT).show();
+                }
                 break;
 
             case R.id.managerProfile:
@@ -376,7 +409,60 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
-
         return super.onOptionsItemSelected(item);
+    }
+
+    private void getDriversFromDatabase() {
+        ArrayList<driver> driverList = new ArrayList<>();
+
+        DatabaseReference driverReference = driverDatabaseReference
+                .child("Managers")
+                .child(FirebaseAuth.getInstance().getCurrentUser().getUid());
+        driverReference.addListenerForSingleValueEvent(new ValueEventListener() {
+
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                driverList.clear();
+                for (DataSnapshot keyNode : dataSnapshot.getChildren()) {
+                    driver d = keyNode.child("driver").getValue(driver.class);
+                    driverList.add(d);
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+                Toast.makeText(MapHome.this, "Error: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        ArrayList<String> onlineStatusList=new ArrayList<>();
+
+        driverDatabaseReference.child("Managers").child(FirebaseAuth.getInstance().getCurrentUser().getUid())
+                .addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+
+                        for(DataSnapshot keyNode:dataSnapshot.getChildren())
+                        {
+                            if(keyNode.child("liveLocation").exists())
+                            {
+                                onlineStatusList.add("yes");
+                            }
+                            else
+                            {
+                                onlineStatusList.add("no");
+                            }
+                        }
+                        Intent intent = new Intent(MapHome.this, DriversActivity.class);
+                        intent.putExtra("onlineStatusList",onlineStatusList);
+                        intent.putExtra("drivers",driverList);
+                        startActivity(intent);
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError databaseError) {
+                        Toast.makeText(MapHome.this, "Error: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                });
     }
 }
