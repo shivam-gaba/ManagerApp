@@ -67,13 +67,11 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
     ArrayList<marker> markers = new ArrayList<marker>();
     ArrayList<DriverLiveLocation> driverLiveLocations = new ArrayList<>();
 
-
     FirebaseOptions firebaseOptions;
     FirebaseApp driverApp;
     FirebaseDatabase driverDatabase;
     DatabaseReference driverDatabaseReference;
 
-    public static int activeUsers;
     public static int offlineUsers;
     TextView tvTotalDrivers, tvActiveDrivers;
 
@@ -94,7 +92,6 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
         toggle.syncState();
         navigationView.setNavigationItemSelectedListener(this);
 
-
         try {
             firebaseOptions = new FirebaseOptions.Builder()
                     .setApiKey("AIzaSyAub2yA7zUX_1a_W6hlcKoPrp7UyyKHjGw")
@@ -105,7 +102,8 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
             driverApp = FirebaseApp.initializeApp(getApplicationContext(), firebaseOptions, "Driver App");
             driverDatabase = FirebaseDatabase.getInstance(driverApp);
             driverDatabaseReference = driverDatabase.getReference();
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
         }
 
         mapView = findViewById(R.id.mapView);
@@ -171,8 +169,8 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
                             offlineUsers++;
                         }
                     }
-                    tvActiveDrivers.setText(driverLiveLocations.size() + "");
 
+                    tvActiveDrivers.setText(driverLiveLocations.size() + "");
                     tvTotalDrivers.setText(driverLiveLocations.size() + offlineUsers + "");
 
                     ArrayList<Double> lat = new ArrayList<Double>();
@@ -376,12 +374,51 @@ public class MapHome extends AppCompatActivity implements NavigationView.OnNavig
                 break;
 
             case R.id.managerProfile:
+                showManagerProfile();
                 break;
         }
 
         DrawerLayout drawer = findViewById(R.id.drawer_layout);
         drawer.closeDrawer(GravityCompat.START);
         return true;
+    }
+
+    private void showManagerProfile() {
+
+        ArrayList<manager> managerList = new ArrayList<>();
+
+        FirebaseDatabase database = FirebaseDatabase.getInstance();
+        DatabaseReference managerReference = database.getReference().child("Managers").child(FirebaseAuth.getInstance().getCurrentUser().getUid());
+        managerReference.addListenerForSingleValueEvent(new ValueEventListener() {
+
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+
+                        manager m = dataSnapshot.getValue(manager.class);
+                        managerList.add(m);
+
+                    String managerName = managerList.get(0).getManagerName();
+                    String managerPhoneNumber = managerList.get(0).getManagerPhoneNumber();
+                    String managerEmailId = managerList.get(0).getManagerEmailId();
+                    String managerPicUrl = managerList.get(0).getManagerPicUrl();
+
+                    Intent profileIntent = new Intent(MapHome.this, Profile.class);
+                    profileIntent.putExtra("managerName", managerName);
+                    profileIntent.putExtra("managerPicUrl", managerPicUrl);
+                    profileIntent.putExtra("managerEmailId", managerEmailId);
+                    profileIntent.putExtra("managerPhoneNumber", managerPhoneNumber);
+                    if (managerList.isEmpty()) {
+                        Toast.makeText(MapHome.this, "No Data Available", Toast.LENGTH_SHORT).show();
+                    } else {
+                        startActivity(profileIntent);
+                    }
+                }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+                Toast.makeText(getApplicationContext(), "ERROR: " + databaseError.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
 

@@ -10,6 +10,7 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <activity android:name=".DriversActivity"></activity>
+        <activity android:name=".Profile"></activity>
         <activity
             android:name=".MapHome"
             android:theme="@style/AppTheme.NoActionBar" />
